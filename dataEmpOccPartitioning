@@ -1,0 +1,100 @@
+import pandas as pd
+import re
+import csv
+
+def advanced_cleaning_logic(row):
+    position = str(row['positionLabel']).strip()
+    employer = str(row['employerLabel']).strip()
+    
+    # 1. Normalisasi awal
+    if position == '-' or position == 'nan' or not position:
+        return row
+    
+    # Hapus awalan "List of"
+    position = re.sub(r'^List of ', '', position, flags=re.IGNORECASE).strip()
+
+    # 2. Logika Pemisahan Berbasis Kata Kunci Institusi (Indonesia & Inggris)
+    # Daftar kata kunci yang menandakan awal nama organisasi
+    org_keywords = [
+        'Universitas', 'Institut', 'Badan', 'Kementerian', 'PT', 'Bank', 
+        'Kepolisian', 'Yayasan', 'Politeknik', 'School', 'Academy'
+    ]
+    org_pattern = r'\b(' + '|'.join(org_keywords) + r')\b'
+    
+    # Cek apakah ada kata kunci organisasi di dalam jabatan
+    org_match = re.search(org_pattern, position, flags=re.IGNORECASE)
+    
+    # Cek juga pemisah standar " of " atau " at "
+    split_match = re.search(r'\s+(of|at)\s+', position, flags=re.IGNORECASE)
+
+    if org_match or split_match:
+        # Tentukan titik potong
+        start_idx = org_match.start() if org_match else split_match.start()
+        # Jika menggunakan 'of/at', geser index agar kata 'of/at' tidak masuk ke employer
+        if split_match and not org_match:
+            start_idx = split_match.end()
+
+        new_pos = position[:start_idx].strip()
+        new_emp = position[start_idx:].strip()
+        
+        # Bersihkan sisa kata hubung di awal employer (seperti 'of ' atau 'the ')
+        new_emp = re.sub(r'^(of|at|the)\s+', '', new_emp, flags=re.IGNORECASE).strip()
+        
+        # Masukkan ke row jika employer lama kosong atau '-'
+        if employer == '-' or employer == 'nan' or not employer:
+            row['employerLabel'] = new_emp.title()
+            row['positionLabel'] = new_pos.capitalize() if new_pos else '-'
+        else:
+            # Jika sudah ada employer, cukup bersihkan position-nya saja
+            row['positionLabel'] = new_pos.capitalize() if new_pos else '-'
+
+    # 3. Logika Khusus "Governor" & "Menteri" (Jabatan + Lokasi)
+    titles_to_split = ['Governor', 'Gubernur', 'Menteri', 'Minister', 'Walikota', 'Bupati']
+    for title in titles_to_split:
+        if position.lower().startswith(title.lower()):
+            # Jika position adalah "Gubernur Bali" dan employer kosong
+            parts = position.split(' ', 1)
+            if len(parts) > 1:
+                title_name = parts[0].capitalize()
+                location = parts[1].strip().title()
+                
+                # Standarisasi "Governor" -> "Bali Governance"
+                if title_name in ['Governor', 'Gubernur']:
+                    row['positionLabel'] = 'Governor'
+                    if row['employerLabel'] == '-' or row['employerLabel'] == 'nan':
+                        row['employerLabel'] = f"{location} Governance"
+                else:
+                    row['positionLabel'] = title_name
+                    if row['employerLabel'] == '-' or row['employerLabel'] == 'nan':
+                        row['employerLabel'] = location
+            break
+
+    # 4. Final Touch: Singularisasi & Hapus Redundansi
+    # Jika employer ada di dalam jabatan, hapus
+    current_pos = str(row['positionLabel'])
+    current_emp = str(row['employerLabel'])
+    if current_emp != '-' and current_emp.lower() in current_pos.lower():
+        clean_pos = re.sub(re.escape(current_emp), '', current_pos, flags=re.IGNORECASE).strip()
+        row['positionLabel'] = re.sub(r'^[\s,]+|[\s,]+$', '', clean_pos).capitalize()
+
+    return row
+
+# --- PROSES EKSEKUSI FILE ---
+
+# 1. Load File (Ganti dengan nama file punyamu)
+input_file = 'merged_alumni_data.csv' 
+df = pd.read_csv(input_file)
+
+# 2. Jalankan Logika Pembersihan
+print("Ongoing partitioning...")
+df_cleaned = df.apply(advanced_cleaning_logic, axis=1)
+
+# 3. Hapus Duplikat yang muncul setelah pembersihan (opsional tapi disarankan)
+df_cleaned = df_cleaned.drop_duplicates()
+
+# 4. Output ke CSV
+output_file = 'normalized_alumni_dataset.csv'
+df_cleaned.to_csv(output_file, index=False, sep=',', quoting=csv.QUOTE_MINIMAL, encoding='utf-8')
+
+print(f"Selesai! Data telah disimpan di: {output_file}")
+print(f"Total baris unik sekarang: {len(df_cleaned)}")
