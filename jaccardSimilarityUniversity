@@ -1,0 +1,38 @@
+// 1. Kumpulkan semua fitur untuk SETIAP universitas
+MATCH (u:University)
+OPTIONAL MATCH (a:Alumni)-[:GRADUATED_FROM]->(u)
+OPTIONAL MATCH (a)-[:HAS_OCCUPATION|WORKS_AT|HOLDS_POSITION]->(x)
+WITH u, collect(DISTINCT labels(x)[0] + ':' + x.name) AS features
+WHERE size(features) > 0
+
+// 2. Masukkan ke dalam list memori
+WITH collect({name: u.name, features: features}) AS univList
+
+// 3. Unwind untuk membuat pasangan perbandingan
+UNWIND univList AS u1
+UNWIND univList AS u2
+
+WITH u1, u2
+WHERE u1.name < u2.name
+
+// 4. Hitung irisan dan gabungan (Union)
+WITH u1.name AS university1, 
+     u2.name AS university2, 
+     [f IN u1.features WHERE f IN u2.features] AS intersection,
+     u1.features AS f1, 
+     u2.features AS f2
+     
+WITH university1, university2, size(intersection) AS interSize,
+     (size(f1) + size(f2) - size(intersection)) AS unionSize
+
+// --- PERBAIKAN: Filter untuk memastikan jumlah data cukup signifikan ---
+WHERE unionSize >= 15
+
+// 5. Hitung skor similarity
+RETURN university1, university2, interSize AS intersectionSize, unionSize,
+       CASE 
+         WHEN unionSize = 0 THEN 0.0 
+         ELSE toFloat(interSize) / unionSize 
+       END AS jaccardSimilarity
+ORDER BY jaccardSimilarity DESC
+LIMIT 20;
