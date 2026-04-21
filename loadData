@@ -1,0 +1,37 @@
+LOAD CSV WITH HEADERS FROM 'https://raw.githubusercontent.com/burhansa25/graph/main/normalized_alumni_dataset.csv' AS row
+
+WITH row
+WHERE row.alumniLabel IS NOT NULL AND trim(row.alumniLabel) <> ''
+  AND row.univLabel IS NOT NULL AND trim(row.univLabel) <> ''
+
+// 1. Buat Node Alumni dan University serta Relasinya
+MERGE (a:Alumni {name: trim(row.alumniLabel)})
+MERGE (u:University {name: trim(row.univLabel)})
+MERGE (a)-[:GRADUATED_FROM]->(u)
+
+// 2. Buat Node Occupation (jika ada)
+FOREACH (_ IN CASE
+  WHEN row.occupationLabel IS NOT NULL AND trim(row.occupationLabel) <> '' THEN [1]
+  ELSE []
+END |
+  MERGE (o:Occupation {name: trim(row.occupationLabel)})
+  MERGE (a)-[:HAS_OCCUPATION]->(o)
+)
+
+// 3. Buat Node Employer (jika ada)
+FOREACH (_ IN CASE
+  WHEN row.employerLabel IS NOT NULL AND trim(row.employerLabel) <> '' THEN [1]
+  ELSE []
+END |
+  MERGE (e:Employer {name: trim(row.employerLabel)})
+  MERGE (a)-[:WORKS_AT]->(e)
+)
+
+// 4. Buat Node Position (jika ada)
+FOREACH (_ IN CASE
+  WHEN row.positionLabel IS NOT NULL AND trim(row.positionLabel) <> '' THEN [1]
+  ELSE []
+END |
+  MERGE (p:Position {name: trim(row.positionLabel)})
+  MERGE (a)-[:HOLDS_POSITION]->(p)
+);
