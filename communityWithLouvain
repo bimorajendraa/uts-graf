@@ -1,0 +1,61 @@
+// CREATE projection
+CALL gds.louvain.write('utsGraph_Filtered', {
+  writeProperty: 'communityId'
+})
+YIELD communityCount, modularity, modularities;
+
+// melihat komunitas yang terbentuk
+MATCH (n)
+WHERE n.communityId IS NOT NULL
+RETURN n.communityId AS komunitas,
+       labels(n)[0] AS tipeNode,
+       count(*) AS jumlah
+ORDER BY komunitas, jumlah DESC;
+
+// melihat jumlah isi dari setiap komunitas yang terbentuk
+MATCH (n)
+WHERE n.communityId IS NOT NULL
+WITH n.communityId AS id, count(*) AS besarKomunitas
+RETURN id, besarKomunitas
+ORDER BY besarKomunitas DESC
+
+// Fokus ke alumni dalam komunitas
+MATCH (a:Alumni)
+WHERE a.communityId IS NOT NULL
+RETURN a.communityId AS communityId, collect(a.name)[0..15] AS contohAlumni, count(*) AS totalAlumni
+ORDER BY totalAlumni DESC
+LIMIT 10;
+
+// FOKUS KOMUNITAS TERBESAR, 744
+// Lihat isi komunitas terbesar, komunitas 744
+MATCH (n)
+WHERE n.communityId IS NOT NULL
+WITH n.communityId AS cid, count(*) AS total
+ORDER BY total DESC
+LIMIT 5
+
+MATCH (m)
+WHERE m.communityId = cid
+RETURN cid AS communityId, labels(m)[0] AS label, m.name AS nama
+LIMIT 100;
+
+// jumlah tiap node dalam komunitas terbesar
+MATCH (n)
+WHERE n.communityId = 744
+RETURN labels(n)[0] AS tipeNode, count(*) AS jumlah
+ORDER BY jumlah DESC
+
+// melihat university mentioned dalam komunitas terbesar
+MATCH (u:University)
+WHERE u.communityId = 744
+RETURN u.name AS Nama_Universitas
+
+// melihat occupation, position, atau employer yang berpengaruh di komunitas terbesar ini
+MATCH (a:Alumni)-[:HAS_OCCUPATION|WORKS_AT|HOLDS_POSITION]->(attr)
+WHERE a.communityId = 744 AND attr.communityId = 744
+RETURN attr.name AS Atribut, 
+       labels(attr)[0] AS Tipe, 
+       count(a) AS Jumlah_Alumni
+ORDER BY Jumlah_Alumni DESC
+LIMIT 20
+
