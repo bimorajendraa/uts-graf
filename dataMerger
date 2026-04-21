@@ -1,0 +1,56 @@
+import pandas as pd
+import re
+
+
+# 1. Load kedua file
+# Pastikan Anda sudah mengupload file ini ke sidebar Colab
+file1 = 'cleaned_full_data_v3.csv'
+file2 = 'query (2).csv'
+
+
+df1 = pd.read_csv(file1)
+df2 = pd.read_csv(file2)
+
+
+def clean_logic(row):
+    pos = str(row['positionLabel']).strip()
+    emp = str(row['employerLabel']).strip()
+   
+    if pos == '-' or not pos or pos == 'nan':
+        return row
+   
+    # Logika untuk Bahasa Indonesia (Hapus nama institusi dari jabatan jika sudah ada di employer)
+    if emp and emp != 'nan' and emp != '-':
+        if emp.lower() in pos.lower():
+            # Contoh: "Rektor Universitas X" -> "Rektor"
+            new_pos = re.sub(re.escape(emp), '', pos, flags=re.IGNORECASE).strip()
+            if new_pos:
+                row['positionLabel'] = new_pos.capitalize()
+
+
+    # Logika untuk Bahasa Inggris (of/at)
+    clean_pos = re.sub(r'^List of ', '', row['positionLabel'], flags=re.IGNORECASE).strip()
+    if ' of ' in clean_pos.lower():
+        parts = clean_pos.split(' of ', 1)
+        row['positionLabel'] = parts[0].strip().capitalize()
+        if not emp or emp == 'nan' or emp == '-':
+            row['employerLabel'] = parts[1].strip().title()
+           
+    return row
+
+
+# 2. Terapkan pembersihan pada file kedua agar seragam
+df2_cleaned = df2.apply(clean_logic, axis=1)
+
+
+# 3. Gabungkan kedua dataframe
+# Kita gunakan ignore_index=True agar nomor baris urut kembali
+df_merged = pd.concat([df1, df2_cleaned], ignore_index=True)
+
+
+# 4. Simpan hasil
+df_merged.to_csv('hasil_gabungan_alumni.csv', index=False)
+
+
+print(f"Berhasil menggabungkan data! Total baris: {len(df_merged)}")
+print(df_merged.head())
