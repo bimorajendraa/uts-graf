@@ -1,0 +1,29 @@
+// 1. Kumpulkan fitur untuk setiap alumni yang punya data cukup (minimal 3 fitur)
+MATCH (a:Alumni)
+MATCH (a)-[:GRADUATED_FROM|HAS_OCCUPATION|WORKS_AT|HOLDS_POSITION]->(x)
+WITH a, collect(DISTINCT labels(x)[0] + ':' + x.name) AS features
+WHERE size(features) >= 3 // FILTER: Hanya alumni dengan data yang lumayan lengkap
+
+// 2. Masukkan ke memori untuk perbandingan cepat
+WITH collect({node: a, name: a.name, features: features}) AS alumniList
+
+// 3. Bandingkan antar alumni
+UNWIND alumniList AS a1
+UNWIND alumniList AS a2
+WITH a1, a2
+WHERE id(a1.node) < id(a2.node)
+
+// 4. Hitung irisan
+WITH a1, a2, [f IN a1.features WHERE f IN a2.features] AS intersection
+WHERE size(intersection) >= 2 // FILTER: Minimal punya 2 kesamaan (misal: Kampus & Jabatan)
+
+// 5. Hitung Skor Jaccard
+WITH a1.name AS alumni1, 
+     a2.name AS alumni2, 
+     size(intersection) AS irisan,
+     (size(a1.features) + size(a2.features) - size(intersection)) AS gabungan
+
+RETURN alumni1, alumni2, irisan, gabungan,
+       toFloat(irisan) / gabungan AS jaccardSimilarity
+ORDER BY jaccardSimilarity DESC, irisan DESC
+LIMIT 200;
