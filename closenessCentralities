@@ -1,0 +1,49 @@
+// focus on undirected graphs
+CALL gds.graph.project(
+  'utsGraph_Undirected',
+  ['Alumni', 'University', 'Occupation', 'Employer', 'Position'],
+  {
+    GRADUATED_FROM: { orientation: 'UNDIRECTED' },
+    HAS_OCCUPATION: { orientation: 'UNDIRECTED' },
+    WORKS_AT: { orientation: 'UNDIRECTED' },
+    HOLDS_POSITION: { orientation: 'UNDIRECTED' }
+  }
+);
+
+// undirected and cleaned for occupation, employer, and position
+CALL gds.graph.project.cypher(
+  'utsGraph_closenessClean',
+  // Query Node: Tetap filter nama "-"
+  'MATCH (n) WHERE NOT n.name IN ["-", "", "null", "Unknown"] RETURN id(n) AS id, labels(n) AS labels',
+  // Query Relationship: Gunakan UNION ALL untuk membuat jalan dua arah
+  'MATCH (s)-[r]->(t) 
+   WHERE NOT s.name IN ["-", ""] AND NOT t.name IN ["-", ""]
+   RETURN id(s) AS source, id(t) AS target, type(r) AS type
+   UNION ALL
+   MATCH (s)-[r]->(t) 
+   WHERE NOT s.name IN ["-", ""] AND NOT t.name IN ["-", ""]
+   RETURN id(t) AS source, id(s) AS target, type(r) AS type'
+)
+
+// Univ paling strategis
+MATCH (u:University)
+WHERE u.closenessScoreUndirected IS NOT NULL
+RETURN u.name AS university, u.closenessScoreUndirected AS closeness
+ORDER BY closeness DESC
+LIMIT 20;
+
+// Alumni paling strategis
+MATCH (a:Alumni)
+WHERE a.closenessScoreUndirected IS NOT NULL
+RETURN a.name AS alumni, a.closenessScoreUndirected AS closeness
+ORDER BY closeness DESC
+LIMIT 20;
+
+// Top occupation, employer, atau position
+MATCH (n)
+WHERE (n:Occupation OR n:Employer OR n:Position)
+  AND n.closenessScoreClean IS NOT NULL
+RETURN labels(n)[0] AS tipe, n.name AS nama, n.closenessScoreClean AS closeness
+ORDER BY closeness DESC
+LIMIT 20;
+
